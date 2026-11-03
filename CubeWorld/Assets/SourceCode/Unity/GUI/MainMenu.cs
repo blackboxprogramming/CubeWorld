@@ -1,5 +1,6 @@
 using UnityEngine;
-using System.Collections;
+using System.Collections.Generic;
+using UnityEngine.Networking;
 using CubeWorld.Gameplay;
 using CubeWorld.Configuration;
 
@@ -243,64 +244,108 @@ public class MainMenu
         MenuSystem.EndMenu();
     }
 
-    public const string CubeworldWebServerServerList = "http://cubeworldweb.appspot.com/list";
-    public const string CubeworldWebServerServerRegister = "http://cubeworldweb.appspot.com/register?owner={owner}&description={description}&port={port}";
+    private UnityWebRequest discoveryRequest;
+    private List<DiscoveryProtocol.Server> servers;
+    private string discoveryMessage;
+    private int serverPage;
+    private const int ServersPerPage = 2;
 
-    private WWW wwwRequest;
-    private string[] servers;
+    public void CloseDiscovery()
+    {
+        if (discoveryRequest != null)
+        {
+            discoveryRequest.Dispose();
+            discoveryRequest = null;
+        }
+        servers = null;
+        discoveryMessage = null;
+        serverPage = 0;
+    }
+
+    private void UpdateDiscovery()
+    {
+        if (servers != null)
+            return;
+
+        if (discoveryRequest == null)
+        {
+            try
+            {
+                discoveryRequest = UnityWebRequest.Get(GameManagerUnity.DiscoveryEndpoint("list").AbsoluteUri);
+                discoveryRequest.timeout = 5;
+                discoveryRequest.SendWebRequest();
+            }
+            catch (System.ArgumentException)
+            {
+                CloseDiscovery();
+                discoveryMessage = "Invalid discovery URL.";
+                servers = new List<DiscoveryProtocol.Server>();
+            }
+            return;
+        }
+
+        if (!discoveryRequest.isDone)
+            return;
+
+        if (discoveryRequest.isNetworkError || discoveryRequest.isHttpError)
+        {
+            discoveryMessage = "Discovery unavailable.";
+            servers = new List<DiscoveryProtocol.Server>();
+        }
+        else
+        {
+            servers = DiscoveryProtocol.ParseList(discoveryRequest.downloadHandler.text);
+            discoveryMessage = servers.Count == 0 ? "No active servers." : null;
+        }
+        discoveryRequest.Dispose();
+        discoveryRequest = null;
+    }
 
     void DrawJoinMultiplayer()
     {
         MenuSystem.BeginMenu("Join Multiplayer");
+        UpdateDiscovery();
 
-        if (wwwRequest == null && servers == null)
-            wwwRequest = new WWW(CubeworldWebServerServerList);
-
-        if (servers == null && wwwRequest != null && wwwRequest.isDone)
-            servers = wwwRequest.text.Split(';');
-
-        if (wwwRequest != null && wwwRequest.isDone)
-        {
-            foreach (string s in servers)
-            {
-                string[] ss = s.Split(',');
-
-                if (ss.Length >= 2)
-                {
-                    MenuSystem.Button("Join [" + ss[0] + ":" + ss[1] + "]", delegate()
-                    {
-                        gameManagerUnity.worldManagerUnity.JoinMultiplayerGame(ss[0], System.Int32.Parse(ss[1]));
-
-                        availableConfigurations = null;
-
-                        wwwRequest = null;
-                        servers = null;
-
-                        state = MainMenuState.NORMAL;
-                    }
-                    );
-                }
-            }
-
-            MenuSystem.Button("Refresh List", delegate()
-            {
-                wwwRequest = null;
-                servers = null;
-            }
-            );
-        }
+        if (servers == null || discoveryMessage != null)
+            MenuSystem.TextField(discoveryMessage ?? "Waiting for discovery...");
         else
         {
-            MenuSystem.TextField("Waiting data from server..");
+            int pages = (servers.Count + ServersPerPage - 1) / ServersPerPage;
+            int start = serverPage * ServersPerPage;
+            int end = System.Math.Min(start + ServersPerPage, servers.Count);
+            for (int i = start; i < end; i++)
+            {
+                DiscoveryProtocol.Server server = servers[i];
+                MenuSystem.Button("Join [" + server.Host + ":" + server.Port + "]", delegate()
+                {
+                    try
+                    {
+                        gameManagerUnity.worldManagerUnity.JoinMultiplayerGame(server.Host, server.Port);
+                        availableConfigurations = null;
+                        CloseDiscovery();
+                        state = MainMenuState.NORMAL;
+                    }
+                    catch (System.Net.Sockets.SocketException)
+                    {
+                        discoveryMessage = "Could not connect to the selected server.";
+                    }
+                });
+            }
+            if (state == MainMenuState.JOIN_MULTIPLAYER && pages > 1)
+            {
+                MenuSystem.Button("Next Page (" + (serverPage + 1) + "/" + pages + ")", delegate()
+                {
+                    serverPage = (serverPage + 1) % pages;
+                });
+            }
         }
 
+        MenuSystem.Button("Refresh List", CloseDiscovery);
         MenuSystem.LastButton("Back", delegate()
         {
-            wwwRequest = null;
-            servers = null;
+            CloseDiscovery();
             state = MainMenuState.NORMAL;
-        }
-        );
+        });
 
         MenuSystem.EndMenu();
     }
@@ -439,8 +484,6 @@ public class MainMenu
                 GameplayDefinition g = new GameplayDefinition("", "", multiplayerServerGameplay, false);
 
                 lastConfig.gameplay = g;
-
-                gameManagerUnity.RegisterInWebServer();
             }
 #endif
 

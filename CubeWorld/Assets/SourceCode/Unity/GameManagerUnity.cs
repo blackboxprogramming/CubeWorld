@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.Networking;
 using System.Collections.Generic;
 using CubeWorld.Configuration;
 
@@ -47,7 +48,7 @@ public class GameManagerUnity : MonoBehaviour
 
     public void Start()
     {
-        Application.RegisterLogCallback(HandleLog);
+        Application.logMessageReceived += HandleLog;
 
         MeshUtils.InitStaticValues();
         CubeWorldPlayerPreferences.LoadPreferences();
@@ -65,6 +66,9 @@ public class GameManagerUnity : MonoBehaviour
 
     public void DestroyWorld()
     {
+#if !UNITY_WEBPLAYER
+        StopDiscoveryRegistration();
+#endif
 		objectsManagerUnity.Clear();
 		
 		sectorManagerUnity.Clear();
@@ -154,31 +158,82 @@ public class GameManagerUnity : MonoBehaviour
         #endif
     }
 
-    #if !UNITY_WEBPLAYER
-
-    private bool registerInWebServer = false;
-    private WWW registerWebServerRequest;
-    private float timerUpdate = 0;
-
-    public void RegisterInWebServer()
+    private static string DiscoveryUrl
     {
-        timerUpdate -= Time.deltaTime;
-
-        registerInWebServer = true;
-
-        if (timerUpdate <= 0 && (registerWebServerRequest == null || registerWebServerRequest.isDone == true))
+        get
         {
-            string url = MainMenu.CubeworldWebServerServerRegister;
-            url = url.Replace("{owner}", "fede");
-            url = url.Replace("{description}", "cwserver");
-            url = url.Replace("{port}", CubeWorld.Gameplay.MultiplayerServerGameplay.SERVER_PORT.ToString());
-            registerWebServerRequest = new WWW(url);
-            timerUpdate = 30;
+            string configured = System.Environment.GetEnvironmentVariable(DiscoveryProtocol.EnvironmentKey);
+            return string.IsNullOrEmpty(configured) ? DiscoveryProtocol.DefaultUrl : configured;
         }
     }
 
-    #endif
-        
+    public static System.Uri DiscoveryEndpoint(string route)
+    {
+        return DiscoveryProtocol.Endpoint(DiscoveryUrl, route);
+    }
+
+#if !UNITY_WEBPLAYER
+    private UnityWebRequest registration;
+    private float nextRegistration;
+
+    private void UpdateDiscoveryRegistration()
+    {
+        if (registration != null)
+        {
+            if (!registration.isDone)
+                return;
+
+            if (registration.isNetworkError || registration.isHttpError
+                || registration.downloadHandler.text != "OK")
+                Debug.LogWarning("CubeWorld could not publish the hosted game to discovery.");
+            registration.Dispose();
+            registration = null;
+        }
+
+        if (Time.realtimeSinceStartup < nextRegistration)
+            return;
+
+        nextRegistration = Time.realtimeSinceStartup + DiscoveryProtocol.HeartbeatSeconds;
+        try
+        {
+            System.Uri url = DiscoveryProtocol.Register(DiscoveryUrl,
+                CubeWorld.Gameplay.MultiplayerServerGameplay.SERVER_PORT, "CubeWorld", "Hosted game");
+            registration = UnityWebRequest.Get(url.AbsoluteUri);
+            registration.timeout = 5;
+            registration.SendWebRequest();
+        }
+        catch (System.ArgumentException)
+        {
+            if (registration != null)
+            {
+                registration.Dispose();
+                registration = null;
+            }
+            Debug.LogWarning("CubeWorld discovery requires a valid HTTP(S) base URL.");
+        }
+    }
+
+    private void StopDiscoveryRegistration()
+    {
+        if (registration != null)
+        {
+            registration.Dispose();
+            registration = null;
+        }
+        nextRegistration = 0;
+    }
+#endif
+
+    private void OnDestroy()
+    {
+        Application.logMessageReceived -= HandleLog;
+        if (mainMenu != null)
+            mainMenu.CloseDiscovery();
+#if !UNITY_WEBPLAYER
+        StopDiscoveryRegistration();
+#endif
+    }
+
     public void StartGame()
     {
         GetComponent<Camera>().enabled = false;
@@ -214,8 +269,9 @@ public class GameManagerUnity : MonoBehaviour
     public void Update()
     {
 #if !UNITY_WEBPLAYER
-        if (registerInWebServer)
-            RegisterInWebServer();
+        if ((state == GameManagerUnityState.GAME || state == GameManagerUnityState.PAUSE)
+            && world != null && world.gameplay is CubeWorld.Gameplay.MultiplayerServerGameplay)
+            UpdateDiscoveryRegistration();
 #endif
 
         switch (state)

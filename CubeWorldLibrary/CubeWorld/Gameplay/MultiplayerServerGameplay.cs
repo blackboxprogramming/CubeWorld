@@ -9,6 +9,7 @@ using CubeWorld.Avatars;
 using CubeWorld.Gameplay.Multiplayer;
 using SourceCode.CubeWorld.Utils;
 using System.IO;
+using System.Net;
 using Ionic.Zlib;
 
 namespace CubeWorld.Gameplay
@@ -21,12 +22,26 @@ namespace CubeWorld.Gameplay
         private BaseGameplay baseGameplay;
         private bool createPlayer;
         private MultiplayerServer server;
+        private readonly IPAddress bindAddress;
+        private readonly int port;
+
+        public int Port
+        {
+            get { return server.Port; }
+        }
 
         public MultiplayerServerGameplay(BaseGameplay baseGameplay, bool createPlayer) :
+            this(baseGameplay, createPlayer, IPAddress.Any, SERVER_PORT)
+        {
+        }
+
+        public MultiplayerServerGameplay(BaseGameplay baseGameplay, bool createPlayer, IPAddress bindAddress, int port) :
             base("multiplayerServer")
         {
             this.baseGameplay = baseGameplay;
             this.createPlayer = createPlayer;
+            this.bindAddress = bindAddress;
+            this.port = port;
         }
 
         public override void Init(CubeWorld.World.CubeWorld world)
@@ -40,7 +55,7 @@ namespace CubeWorld.Gameplay
 
             baseGameplay.Init(world);
 
-            server = new MultiplayerServer(9999, this, this);
+            server = new MultiplayerServer(bindAddress, port, this, this);
         }
 
         public override CubeWorld.World.Generator.GeneratorProcess Generate(CubeWorld.Configuration.Config config)
