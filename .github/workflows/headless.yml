@@ -1,0 +1,29 @@
+name: Headless end to end
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        engine: [source, unity-library]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: dotnet build tools/headless --configuration Release -p:UseUnityLibrary=${{ matrix.engine == 'unity-library' }}
+      - run: python -m unittest discover -s CubeWorldWeb/cubeworldweb/tests -v
+        env:
+          CUBEWORLD_HEADLESS_DLL: tools/headless/bin/Release/net8.0/CubeWorld.Headless.dll

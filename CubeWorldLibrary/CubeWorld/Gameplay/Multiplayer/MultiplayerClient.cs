@@ -68,6 +68,10 @@ namespace CubeWorld.Gameplay.Multiplayer
 
         public bool Update(int limitActions)
         {
+            Socket socket = tcpClient.Client;
+            if (!sendingPolicy && socket.Poll(0, SelectMode.SelectRead) && socket.Available == 0)
+                return false;
+
             if (serverSide && firstByte == true)
             {
                 ReceiveFirstByte();
@@ -223,7 +227,7 @@ namespace CubeWorld.Gameplay.Multiplayer
                         ex.SocketErrorCode != SocketError.NoBufferSpaceAvailable)
                     {
                         //It's a serious error.. re-throw the exception
-                        throw ex;
+                        throw;
                     }
                 }
 

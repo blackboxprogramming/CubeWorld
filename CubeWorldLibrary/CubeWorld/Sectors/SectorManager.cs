@@ -132,14 +132,17 @@ namespace CubeWorld.Sectors
             }
         }
 
-        static private TilePosition currentPlayerPositionForSort;
+        private TilePosition currentPlayerPositionForSort;
 
         public void Update(float deltaTime)
         {
             long start = DateTime.Now.Ticks;
             long ticksInMillisecond = 10000;
 
-            currentPlayerPositionForSort = Graphics.Vector3ToTilePosition(world.avatarManager.player.position);
+            var player = world.avatarManager.player;
+            currentPlayerPositionForSort = player == null
+                ? new TilePosition(world.sizeX / 2, world.sizeY / 2, world.sizeZ / 2)
+                : Graphics.Vector3ToTilePosition(player.position);
 
             if (pendingSectorsUpdateOrderValid == false)
             {
@@ -180,7 +183,7 @@ namespace CubeWorld.Sectors
             }
         }
 
-        static private int CompareSectorsByDistanceToPlayer(Sector sector1, Sector sector2)
+        private int CompareSectorsByDistanceToPlayer(Sector sector1, Sector sector2)
         {
             int dist1 = (currentPlayerPositionForSort - sector1.tileOffset).GetDistanceSquared();
             int dist2 = (currentPlayerPositionForSort - sector2.tileOffset).GetDistanceSquared();

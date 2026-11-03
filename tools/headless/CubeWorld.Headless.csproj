@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../CubeWorldLibrary/CubeWorld/**/*.cs"
+             Condition="'$(UseUnityLibrary)' != 'true'" />
+    <Reference Include="CubeWorldLibrary" Condition="'$(UseUnityLibrary)' == 'true'">
+      <HintPath>../../CubeWorld/Assets/Libs/CubeWorldLibrary.dll</HintPath>
+    </Reference>
+    <Compile Include="../../CubeWorld/Assets/SourceCode/Unity/GUI/DiscoveryProtocol.cs"
+             Link="DiscoveryProtocol.cs" />
+    <Reference Include="Ionic.Zip.Reduced">
+      <HintPath>../../CubeWorld/Assets/Libs/Ionic.Zip.Reduced.dll</HintPath>
+    </Reference>
+    <None Include="../../CubeWorld/Assets/Resources/config_*.xml"
+          Link="config/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -42,6 +42,12 @@ namespace CubeWorld.Gameplay
         {
         }
 
+        public override void Clear()
+        {
+            client.Clear();
+            base.Clear();
+        }
+
         public override void TileClicked(TilePosition tilePosition)
         {
             //base.TileClicked(tilePosition);
@@ -112,10 +118,8 @@ namespace CubeWorld.Gameplay
                 }
             }
 
-            if (initializationDataReceived)
-                client.Update(999);
-            else
-                client.Update(1);
+            if (client.Update(initializationDataReceived ? 999 : 1) == false)
+                stats.connected = false;
         }
 
         public void ClientActionReceived(MultiplayerClient client, MultiplayerAction action)

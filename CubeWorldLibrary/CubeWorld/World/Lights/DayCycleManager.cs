@@ -38,32 +38,35 @@ namespace CubeWorld.World.Lights
 		
 		public void Update(float deltaTime)
 		{
-            dayTime += deltaTime;
+            if (dayDuration <= 0 || dayTimeLuminances == null || dayTimeLuminances.Length == 0)
+                return;
 
-            while (dayTime > dayDuration)
-                dayTime -= dayDuration;
+            dayTime += deltaTime;
+            if (dayTime > dayDuration)
+                dayTime %= dayDuration;
 
             float normalizedDayTime = dayTime / dayDuration;
-
-            byte newLuminance = 0;
-
-            for (int i = 0; i < dayTimeLuminances.Length; i++)
+            float luminance = dayTimeLuminances[0].luminancePercent;
+            for (int i = 1; i < dayTimeLuminances.Length; i++)
             {
-                if (dayTimeLuminances[i].toTimePercent >= normalizedDayTime)
+                DayTimeLuminanceInfo source = dayTimeLuminances[i - 1];
+                DayTimeLuminanceInfo target = dayTimeLuminances[i];
+                if (normalizedDayTime <= source.toTimePercent)
+                    break;
+
+                if (normalizedDayTime <= target.toTimePercent)
                 {
-                    int targetPercent = dayTimeLuminances[i].luminancePercent;
-                    float targetTime = dayTimeLuminances[i].toTimePercent;
-
-                    int sourcePercent = dayTimeLuminances[(i - 1) % dayTimeLuminances.Length].luminancePercent;
-                    float sourceTime = dayTimeLuminances[(i - 1) % dayTimeLuminances.Length].toTimePercent;
-
-                    float normalizedDeltaTime = (normalizedDayTime - sourceTime) / (targetTime - sourceTime);
-
-                    newLuminance = (byte)(((int)Tile.MAX_LUMINANCE) * (sourcePercent + (targetPercent - sourcePercent) * normalizedDeltaTime) / 100);
-
+                    float fraction = (normalizedDayTime - source.toTimePercent)
+                        / (target.toTimePercent - source.toTimePercent);
+                    luminance = source.luminancePercent
+                        + (target.luminancePercent - source.luminancePercent) * fraction;
                     break;
                 }
+
+                luminance = target.luminancePercent;
             }
+
+            byte newLuminance = (byte)(Tile.MAX_LUMINANCE * luminance / 100);
 
             if (newLuminance != ambientLightLuminance)
             {

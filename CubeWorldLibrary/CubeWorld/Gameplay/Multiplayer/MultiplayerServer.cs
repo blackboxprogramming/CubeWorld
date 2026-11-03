@@ -17,11 +17,21 @@ namespace CubeWorld.Gameplay.Multiplayer
         private IMultiplayerServerListener serverListener;
         private IMultiplayerClientListener clientListener;
 
+        public int Port
+        {
+            get { return ((IPEndPoint)serverSocket.LocalEndpoint).Port; }
+        }
+
         public MultiplayerServer(int port, IMultiplayerServerListener serverListener, IMultiplayerClientListener clientListener)
+            : this(IPAddress.Any, port, serverListener, clientListener)
+        {
+        }
+
+        public MultiplayerServer(IPAddress bindAddress, int port, IMultiplayerServerListener serverListener, IMultiplayerClientListener clientListener)
         {
             this.serverListener = serverListener;
             this.clientListener = clientListener;
-            serverSocket = new TcpListener(IPAddress.Any, port);
+            serverSocket = new TcpListener(bindAddress, port);
             serverSocket.Start();
         }
 
@@ -74,7 +84,7 @@ namespace CubeWorld.Gameplay.Multiplayer
                 }
                 clients.Remove(client);
 
-                if (client.sendingPolicy == false)
+                if (client.id >= 0)
                     serverListener.ClientDisconnected(client);
             }
         }
@@ -113,13 +123,7 @@ namespace CubeWorld.Gameplay.Multiplayer
 
             clients.Clear();
 
-            try
-            {
-                serverSocket.Server.Close();
-            }
-            catch (Exception)
-            {
-            }
+            serverSocket.Stop();
         }
     }
 }
